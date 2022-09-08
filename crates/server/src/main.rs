@@ -1,12 +1,14 @@
-use std::net::SocketAddr;
+use std::{collections::HashMap, net::SocketAddr, sync::Mutex};
 
 use axum::{
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
     http::Method,
     response::IntoResponse,
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
+use lazy_static::lazy_static;
+use serde::Deserialize;
 use tower_http::cors::{Any, CorsLayer};
 
 use types::UserInfo;
@@ -17,6 +19,7 @@ async fn main() {
         .route("/ws", get(ws_handler))
         .route("/user", get(user_handler))
         .route("/", get(handler))
+        .route("/login", post(login))
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)
@@ -29,6 +32,26 @@ async fn main() {
         .serve(app.into_make_service())
         .await
         .unwrap();
+}
+
+#[derive(Deserialize)]
+struct User {
+    id: u16,
+}
+
+lazy_static! {
+    static ref MP: Mutex<HashMap<u16, bool>> = Default::default();
+}
+
+async fn login(data: String) -> String {
+    let data = serde_json::from_str::<User>(&data);
+    match data {
+        Ok(user) => {
+            MP.lock().unwrap().insert(user.id, true);
+            format!("login id: {}", user.id)
+        }
+        Err(_) => "Error".to_string(),
+    }
 }
 
 async fn handler() -> impl IntoResponse {
