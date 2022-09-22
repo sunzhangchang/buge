@@ -8,7 +8,7 @@ use axum::{
     Json, Router,
 };
 use lazy_static::lazy_static;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tower_http::cors::{Any, CorsLayer};
 
 use types::UserInfo;
@@ -19,11 +19,12 @@ async fn main() {
         .route("/ws", get(ws_handler))
         .route("/user", get(user_handler))
         .route("/", get(handler))
-        .route("/login", post(login))
+        .route("/login", post(login).get(login))
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)
-                .allow_methods(vec![Method::GET, Method::POST]),
+                .allow_methods(vec![Method::GET, Method::POST])
+                .allow_headers(Any)
         );
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3001));
@@ -34,23 +35,48 @@ async fn main() {
         .unwrap();
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct User {
-    id: u16,
+    user_id: u16,
+    password: String,
 }
 
 lazy_static! {
     static ref MP: Mutex<HashMap<u16, bool>> = Default::default();
 }
 
-async fn login(data: String) -> String {
-    let data = serde_json::from_str::<User>(&data);
-    match data {
-        Ok(user) => {
-            MP.lock().unwrap().insert(user.id, true);
-            format!("login id: {}", user.id)
+#[inline]
+fn mp_get(k: &u16) -> bool {
+    match MP.lock().unwrap().get(k) {
+        Some(res) => res.to_owned(),
+        None => false,
+    }
+}
+
+#[inline]
+fn mp_insert(k: u16, v: bool) {
+    MP.lock().unwrap().insert(k, v);
+}
+
+#[derive(Serialize)]
+enum LoginStatus {
+    WrongPassword,
+    Accepted,
+    RepeatLogin,
+}
+
+async fn login(data: Json<User>) -> impl IntoResponse {
+    let user = data.0;
+    println!("login request: {}", serde_json::to_string(&user).unwrap());
+    if user.user_id == 1 && user.password == "a" {
+        if mp_get(&user.user_id) {
+            Json(LoginStatus::RepeatLogin)
+        } else {
+            mp_insert(user.user_id, true);
+            Json(LoginStatus::Accepted)
         }
-        Err(_) => "Error".to_string(),
+    } else {
+        Json(LoginStatus::WrongPassword)
     }
 }
 
