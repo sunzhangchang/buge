@@ -2,7 +2,7 @@ mod components;
 mod util;
 
 use components::login::Login;
-use types::LoginStatus;
+use types::LoginState;
 use wasm_bindgen::prelude::*;
 use yew::prelude::*;
 
@@ -25,12 +25,12 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 #[derive(Default)]
 struct App {
-    data: LoginStatus,
+    data: LoginState,
     loginned: bool,
 }
 
 enum AppMsg {
-    LoginStatus(LoginStatus),
+    LoginStatus(LoginState),
 }
 
 impl Component for App {
@@ -59,9 +59,9 @@ impl Component for App {
                 } else {
                     {
                         format!("{}", match self.data {
-                            LoginStatus::Accepted => "AC",
-                            LoginStatus::RepeatLogin => "RE",
-                            LoginStatus::WrongPassword => "WA",
+                            LoginState::Accepted => "AC",
+                            LoginState::RepeatLogin => "RE",
+                            LoginState::WrongPassword => "WA",
                         })
                     }
                 }

@@ -7,10 +7,9 @@ pub struct UserInfo {
 }
 
 #[derive(Default, Deserialize)]
-pub enum LoginStatus {
+pub enum LoginState {
     #[default]
     WrongPassword,
     Accepted,
     RepeatLogin,
 }
-

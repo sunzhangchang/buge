@@ -9,6 +9,7 @@ use axum::{
 };
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use tower_http::cors::{Any, CorsLayer};
 
 use types::UserInfo;
@@ -24,7 +25,7 @@ async fn main() {
             CorsLayer::new()
                 .allow_origin(Any)
                 .allow_methods(vec![Method::GET, Method::POST])
-                .allow_headers(Any)
+                .allow_headers(Any),
         );
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3001));
@@ -59,10 +60,11 @@ fn mp_insert(k: u16, v: bool) {
 }
 
 #[derive(Serialize)]
-enum LoginStatus {
+enum LoginState {
     WrongPassword,
     Accepted,
     RepeatLogin,
+    Error,
 }
 
 async fn login(data: Json<User>) -> impl IntoResponse {
@@ -70,13 +72,13 @@ async fn login(data: Json<User>) -> impl IntoResponse {
     println!("login request: {}", serde_json::to_string(&user).unwrap());
     if user.user_id == 1 && user.password == "a" {
         if mp_get(&user.user_id) {
-            Json(LoginStatus::RepeatLogin)
+            Json(LoginState::RepeatLogin)
         } else {
             mp_insert(user.user_id, true);
-            Json(LoginStatus::Accepted)
+            Json(LoginState::Accepted)
         }
     } else {
-        Json(LoginStatus::WrongPassword)
+        Json(LoginState::WrongPassword)
     }
 }
 
@@ -103,9 +105,27 @@ async fn handle_socket(mut socket: WebSocket) {
             if let Ok(msg) = msg {
                 match msg {
                     Message::Text(t) => {
+                        println!("login request: {}", t);
+                        let state = match serde_json::from_str::<User>(&t) {
+                            Ok(user) => {
+                                println!("login user: {}", serde_json::to_string(&user).unwrap());
+                                if user.user_id == 1 && user.password == "a" {
+                                    if mp_get(&user.user_id) {
+                                        LoginState::RepeatLogin
+                                    } else {
+                                        mp_insert(user.user_id, true);
+                                        LoginState::Accepted
+                                    }
+                                } else {
+                                    LoginState::WrongPassword
+                                }
+                            }
+                            Err(_) => LoginState::Error,
+                        };
+
                         // Echo
                         if socket
-                            .send(Message::Text(format!("Echo from backend: {}", t)))
+                            .send(Message::Text(serde_json::to_string(&state).unwrap()))
                             .await
                             .is_err()
                         {
